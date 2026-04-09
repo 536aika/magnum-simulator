@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Collapse,
   Container,
   CssBaseline,
   Divider,
@@ -192,7 +193,7 @@ function SizeCard({
 }
 
 export default function App() {
-  const [business, setBusiness] = useState<Business>('host')
+  const [business, setBusiness] = useState<Business | null>(null)
   const [rows, setRows] = useState<Record<SizeKey, RowState>>({
     '3L': { count: '', price: '' },
     '6L': { count: '', price: '' },
@@ -332,7 +333,7 @@ export default function App() {
               exclusive
               value={business}
               onChange={(_, v: Business | null) => {
-                if (v) setBusiness(v)
+                if (v != null) setBusiness(v)
               }}
               sx={{
                 width: '100%',
@@ -372,33 +373,53 @@ export default function App() {
             <Divider />
           </Stack>
 
-          <Stack spacing={1.5} sx={{ mt: 2 }}>
-            {(['3L', '6L', '15L'] as const).map((sz) => (
-              <SizeCard
-                key={sz}
-                size={sz}
-                sale={perSizeSales[sz]}
-                placeholder={PLACEHOLDER_YEN[business][sz]}
-                count={rows[sz].count}
-                price={rows[sz].price}
-                onPriceChange={(v) => handleChange(sz, 'price', v)}
-                onCountChange={(v) => handleChange(sz, 'count', v)}
-                onNudgeCount={(d) => nudgeCount(sz, d)}
-              />
-            ))}
-
-            <Button
-              variant="outlined"
-              onClick={handleReset}
+          {business === null ? (
+            <Box
               sx={{
-                borderRadius: 999,
-                fontWeight: 800,
-                minHeight: 48,
+                mt: 2,
+                p: 2,
+                borderRadius: 2,
+                border: '1px dashed',
+                borderColor: 'divider',
+                bgcolor: 'rgba(15, 23, 42, 0.02)',
               }}
             >
-              リセット
-            </Button>
-          </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+                まず業態を選ぶと、3L / 6L / 15L の入力が表示されます。
+              </Typography>
+            </Box>
+          ) : null}
+
+          <Collapse in={business !== null} timeout="auto" unmountOnExit>
+            <Stack spacing={1.5} sx={{ mt: 2 }}>
+              {business !== null &&
+                (['3L', '6L', '15L'] as const).map((sz) => (
+                  <SizeCard
+                    key={sz}
+                    size={sz}
+                    sale={perSizeSales[sz]}
+                    placeholder={PLACEHOLDER_YEN[business][sz]}
+                    count={rows[sz].count}
+                    price={rows[sz].price}
+                    onPriceChange={(v) => handleChange(sz, 'price', v)}
+                    onCountChange={(v) => handleChange(sz, 'count', v)}
+                    onNudgeCount={(d) => nudgeCount(sz, d)}
+                  />
+                ))}
+
+              <Button
+                variant="outlined"
+                onClick={handleReset}
+                sx={{
+                  borderRadius: 999,
+                  fontWeight: 800,
+                  minHeight: 48,
+                }}
+              >
+                リセット
+              </Button>
+            </Stack>
+          </Collapse>
         </Container>
 
         {/* Sticky total */}
