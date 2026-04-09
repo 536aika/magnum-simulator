@@ -200,6 +200,11 @@ export default function App() {
     '15L': { count: '', price: '' },
   })
 
+  const backUrl =
+    typeof import.meta.env.VITE_BACK_URL === 'string' && import.meta.env.VITE_BACK_URL.trim()
+      ? import.meta.env.VITE_BACK_URL
+      : 'https://lin.ee/RW2k4Uv'
+
   useEffect(() => {
     const raw = import.meta.env.VITE_LIFF_ID
     if (typeof raw !== 'string' || !raw.trim()) return
@@ -290,6 +295,43 @@ export default function App() {
       '6L': { count: '', price: '' },
       '15L': { count: '', price: '' },
     })
+  }
+
+  const sendLogToSheet = async () => {
+    const endpoint = import.meta.env.VITE_LOG_ENDPOINT
+    if (typeof endpoint !== 'string' || !endpoint.trim()) return
+    if (business === null) return
+
+    const payload = {
+      at: new Date().toISOString(),
+      business,
+      businessLabel: BUSINESS_LABEL[business],
+      rows,
+      perSizeSales,
+      totalSales,
+      userAgent: navigator.userAgent,
+    }
+
+    try {
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      })
+    } catch {
+      // 送信失敗しても「戻る」は継続する
+    }
+  }
+
+  const handleBackToLine = async () => {
+    await sendLogToSheet()
+    const w = window as unknown as { liff?: { isInClient?: () => boolean; closeWindow?: () => void } }
+    if (w.liff?.isInClient?.() && w.liff?.closeWindow) {
+      w.liff.closeWindow()
+      return
+    }
+    window.location.href = backUrl
   }
 
   return (
@@ -417,6 +459,19 @@ export default function App() {
                 }}
               >
                 リセット
+              </Button>
+
+              <Button
+                variant="contained"
+                onClick={handleBackToLine}
+                sx={{
+                  borderRadius: 999,
+                  fontWeight: 900,
+                  minHeight: 48,
+                  background: GRADIENT,
+                }}
+              >
+                LINEに戻る
               </Button>
             </Stack>
           </Collapse>
