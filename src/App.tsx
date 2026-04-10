@@ -107,7 +107,7 @@ function buildLogPostBody(business: Business, rows: Record<SizeKey, RowState>): 
   const p15 = toIntFromInput(rows['15L'].price)
   const s15 = c15 * p15
   return {
-    at: new Date().toISOString(),
+    at: new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
     business,
     businessLabel: BUSINESS_LABEL[business],
     '3L_count': c3,
