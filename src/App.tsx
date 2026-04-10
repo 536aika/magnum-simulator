@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -74,6 +74,69 @@ function formatYen(value: number): string {
     currency: 'JPY',
     maximumFractionDigits: 0,
   }).format(value)
+}
+
+/** 「LINEに戻る」を押さず入力だけした場合の自動送信までの無操作時間 */
+const AUTO_LOG_IDLE_MS = 45_000
+
+type LogPostBody = {
+  at: string
+  business: Business
+  businessLabel: string
+  '3L_count': number
+  '3L_price': number
+  '3L_sales': number
+  '6L_count': number
+  '6L_price': number
+  '6L_sales': number
+  '15L_count': number
+  '15L_price': number
+  '15L_sales': number
+  totalSales: number
+  userAgent: string
+}
+
+function buildLogPostBody(business: Business, rows: Record<SizeKey, RowState>): LogPostBody {
+  const c3 = toIntFromInput(rows['3L'].count)
+  const p3 = toIntFromInput(rows['3L'].price)
+  const s3 = c3 * p3
+  const c6 = toIntFromInput(rows['6L'].count)
+  const p6 = toIntFromInput(rows['6L'].price)
+  const s6 = c6 * p6
+  const c15 = toIntFromInput(rows['15L'].count)
+  const p15 = toIntFromInput(rows['15L'].price)
+  const s15 = c15 * p15
+  return {
+    at: new Date().toISOString(),
+    business,
+    businessLabel: BUSINESS_LABEL[business],
+    '3L_count': c3,
+    '3L_price': p3,
+    '3L_sales': s3,
+    '6L_count': c6,
+    '6L_price': p6,
+    '6L_sales': s6,
+    '15L_count': c15,
+    '15L_price': p15,
+    '15L_sales': s15,
+    totalSales: s3 + s6 + s15,
+    userAgent: navigator.userAgent,
+  }
+}
+
+async function postLogToEndpoint(body: LogPostBody): Promise<void> {
+  const endpoint = import.meta.env.VITE_LOG_ENDPOINT
+  if (typeof endpoint !== 'string' || !endpoint.trim()) return
+  try {
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true,
+    })
+  } catch {
+    // 送信失敗は握りつぶす（戻る遷移や入力は継続）
+  }
 }
 
 type SizeCardProps = {
@@ -200,6 +263,29 @@ export default function App() {
     '15L': { count: '', price: '' },
   })
 
+  const logStateRef = useRef({ business: null as Business | null, rows })
+  logStateRef.current = { business, rows }
+
+  useEffect(() => {
+    if (business === null) return
+    const total =
+      toIntFromInput(rows['3L'].count) * toIntFromInput(rows['3L'].price) +
+      toIntFromInput(rows['6L'].count) * toIntFromInput(rows['6L'].price) +
+      toIntFromInput(rows['15L'].count) * toIntFromInput(rows['15L'].price)
+    if (total <= 0) return
+    const t = window.setTimeout(() => {
+      const { business: b, rows: r } = logStateRef.current
+      if (b === null) return
+      const idleTotal =
+        toIntFromInput(r['3L'].count) * toIntFromInput(r['3L'].price) +
+        toIntFromInput(r['6L'].count) * toIntFromInput(r['6L'].price) +
+        toIntFromInput(r['15L'].count) * toIntFromInput(r['15L'].price)
+      if (idleTotal <= 0) return
+      void postLogToEndpoint(buildLogPostBody(b, r))
+    }, AUTO_LOG_IDLE_MS)
+    return () => window.clearTimeout(t)
+  }, [rows, business])
+
   const backUrl =
     typeof import.meta.env.VITE_BACK_URL === 'string' && import.meta.env.VITE_BACK_URL.trim()
       ? import.meta.env.VITE_BACK_URL
@@ -297,35 +383,10 @@ export default function App() {
     })
   }
 
-  const sendLogToSheet = async () => {
-    const endpoint = import.meta.env.VITE_LOG_ENDPOINT
-    if (typeof endpoint !== 'string' || !endpoint.trim()) return
-    if (business === null) return
-
-    const payload = {
-      at: new Date().toISOString(),
-      business,
-      businessLabel: BUSINESS_LABEL[business],
-      rows,
-      perSizeSales,
-      totalSales,
-      userAgent: navigator.userAgent,
-    }
-
-    try {
-      await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      })
-    } catch {
-      // 送信失敗しても「戻る」は継続する
-    }
-  }
-
   const handleBackToLine = async () => {
-    await sendLogToSheet()
+    if (business !== null) {
+      await postLogToEndpoint(buildLogPostBody(business, rows))
+    }
     const w = window as unknown as { liff?: { isInClient?: () => boolean; closeWindow?: () => void } }
     if (w.liff?.isInClient?.() && w.liff?.closeWindow) {
       w.liff.closeWindow()
