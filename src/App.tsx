@@ -133,6 +133,7 @@ async function postLogToEndpoint(body: LogPostBody): Promise<void> {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
       keepalive: true,
+      mode: 'no-cors',
     })
   } catch {
     // 送信失敗は握りつぶす（戻る遷移や入力は継続）
